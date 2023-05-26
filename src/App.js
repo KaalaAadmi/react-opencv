@@ -1,25 +1,72 @@
-import logo from './logo.svg';
-import './App.css';
+import React from "react";
+import Webcam from "react-webcam";
+import cv from "@techstark/opencv-js";
+import { loadHaarFaceModels, detectHaarFace } from "./haarFaceDetection";
+import "./styles.css";
 
-function App() {
+export default function App() {
+  const [modelLoaded, setModelLoaded] = React.useState(false);
+
+  React.useEffect(() => {
+    loadHaarFaceModels().then(() => {
+      setModelLoaded(true);
+    });
+  }, []);
+
+  const webcamRef = React.useRef(null);
+  const imgRef = React.useRef(null);
+  const faceImgRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!modelLoaded) return;
+
+    const detectFace = async () => {
+      const imageSrc = webcamRef.current.getScreenshot();
+      if (!imageSrc) return;
+
+      return new Promise((resolve) => {
+        imgRef.current.src = imageSrc;
+        imgRef.current.onload = () => {
+          try {
+            const img = cv.imread(imgRef.current);
+            detectHaarFace(img);
+            cv.imshow(faceImgRef.current, img);
+
+            img.delete();
+            resolve();
+          } catch (error) {
+            console.log(error);
+            resolve();
+          }
+        };
+      });
+    };
+
+    let handle;
+    const nextTick = () => {
+      handle = requestAnimationFrame(async () => {
+        await detectFace();
+        nextTick();
+      });
+    };
+    nextTick();
+    return () => {
+      cancelAnimationFrame(handle);
+    };
+  }, [modelLoaded]);
+
   return (
     <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.js</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+      <h2>Real-time Face Detection</h2>
+      <Webcam
+        ref={webcamRef}
+        className="webcam"
+        mirrored
+        screenshotFormat="image/jpeg"
+      />
+      <img className="inputImage" alt="input" ref={imgRef} />
+      <canvas className="outputImage" ref={faceImgRef} />
+      {!modelLoaded && <div>Loading Haar-cascade face model...</div>}
     </div>
   );
 }
-
-export default App;
